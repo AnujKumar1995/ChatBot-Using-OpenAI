@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  chatbot:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-3.5-turbo
+      - DEBUG=False
+      - MAX_TOKENS=2000
+      - TEMPERATURE=0.7
+    env_file:
+      - .env
+    container_name: openai-chatbot
+    restart: unless-stopped
