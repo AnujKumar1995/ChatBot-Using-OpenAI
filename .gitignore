@@ -61,3 +61,4 @@ temp/
 
 # Binary folders
 .bin/
+node_modules/
