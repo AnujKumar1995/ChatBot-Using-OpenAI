@@ -1,375 +1,412 @@
-# OpenAI Chatbot API
+# Customer Support Chatbot — OpenAI + React + FastAPI
 
-A FastAPI-based web application that provides a RESTful API for interacting with OpenAI's language models. This chatbot maintains conversation history and provides context-aware responses.
+A production-ready customer support chatbot with a responsive React frontend, FastAPI backend, OpenAI integration, streaming responses, and fine-tuning support.
+
+![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square) ![Frontend](https://img.shields.io/badge/Frontend-React%2018-61DAFB?style=flat-square) ![AI](https://img.shields.io/badge/AI-OpenAI%20GPT--4o--mini-412991?style=flat-square) ![Docker](https://img.shields.io/badge/Deploy-Docker-2496ED?style=flat-square)
+
+---
+
+## Table of Contents
+
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Quick Start](#quick-start)
+4. [Project Structure](#project-structure)
+5. [Backend API](#backend-api)
+6. [Frontend](#frontend)
+7. [Fine-Tuning Your Model](#fine-tuning-your-model)
+8. [Configuration](#configuration)
+9. [Docker Deployment](#docker-deployment)
+10. [Development](#development)
+11. [Troubleshooting](#troubleshooting)
+
+---
 
 ## Features
 
-✨ **Key Features:**
-- **FastAPI Backend**: Modern, fast Python web framework with automatic API documentation
-- **OpenAI Integration**: Uses OpenAI's GPT models for intelligent responses
-- **Conversation Memory**: Maintains conversation history for context-aware responses
-- **RESTful API**: Clean, well-documented API endpoints
-- **Error Handling**: Comprehensive error handling and logging
-- **CORS Support**: Cross-origin resource sharing enabled
-- **Health Checks**: Built-in health check endpoint
-- **Conversation Management**: Clear conversations and generate summaries
+- **Responsive Chat UI** — Mobile-first React interface with message bubbles, typing indicators, auto-scroll
+- **Customer Support Persona** — Pre-configured system prompt for professional, empathetic responses
+- **Streaming Support** — Server-Sent Events (SSE) for real-time token-by-token responses
+- **Conversation History** — Maintains context across messages within a session
+- **Quick Action Buttons** — Common customer queries available with one click
+- **Rate Limiting** — Configurable per-minute request limits
+- **Fine-Tuning Pipeline** — Scripts & training data to customize the model to your business
+- **Session Management** — Track conversations with unique session IDs
+- **Feedback System** — Customers can rate responses
+- **Docker Ready** — Multi-stage build for one-command deployment
+- **API Documentation** — Auto-generated Swagger/OpenAPI docs at `/docs`
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────┐
+│         React Frontend          │
+│  (responsive chat UI)           │
+│  Port 3000 (dev) / served by    │
+│  FastAPI in production          │
+└──────────┬──────────────────────┘
+           │ HTTP / SSE
+┌──────────▼──────────────────────┐
+│       FastAPI Backend           │
+│  /api/chat     - send message   │
+│  /api/chat/stream - SSE stream  │
+│  /api/health   - health check   │
+│  /api/clear    - reset session  │
+│  /api/feedback - user feedback  │
+│  Port 8000                      │
+└──────────┬──────────────────────┘
+           │ HTTPS
+┌──────────▼──────────────────────┐
+│       OpenAI API                │
+│  gpt-4o-mini (or fine-tuned)    │
+└─────────────────────────────────┘
+```
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- OpenAI API key — get one at **https://platform.openai.com/api-keys**
+
+### 1. Clone & configure
+
+```bash
+cd "ChatBot Using OpenAI"
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+### 2. Start the backend
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+### 3. Start the frontend
+
+```bash
+cd frontend
+npm install
+npm start
+# Opens http://localhost:3000
+```
+
+### 4. Or use Docker (one command)
+
+```bash
+docker-compose up --build
+# Opens http://localhost:8000
+```
+
+---
 
 ## Project Structure
 
 ```
-ChatBot Using OpenAI/
 ├── app/
-│   ├── __init__.py           # Package initialization
-│   ├── main.py              # FastAPI application
-│   ├── chatbot.py           # ChatbotService class
-│   └── models.py            # Pydantic models
+│   ├── __init__.py
+│   ├── main.py              # FastAPI app, routes, rate limiting, static file serving
+│   ├── chatbot.py           # Async OpenAI service with streaming
+│   └── models.py            # Pydantic request/response models
 ├── config/
-│   └── settings.py          # Configuration settings
-├── requirements.txt         # Python dependencies
-├── .env.example            # Example environment variables
-└── README.md               # This file
+│   └── settings.py          # Environment-based configuration
+├── frontend/
+│   ├── public/
+│   │   └── index.html
+│   └── src/
+│       ├── App.js           # Main application component
+│       ├── index.js          # React entry point
+│       ├── components/
+│       │   ├── Header.js     # Chat header with status & clear button
+│       │   ├── MessageList.js # Message display with markdown support
+│       │   ├── ChatInput.js  # Auto-resizing input with send/cancel
+│       │   └── QuickActions.js # Suggested question buttons
+│       ├── hooks/
+│       │   └── useChat.js    # Chat state management hook
+│       └── styles/
+│           └── index.css     # Complete responsive styles
+├── training_data/
+│   └── customer_support_training.jsonl  # Sample fine-tuning data
+├── fine_tune.py             # Fine-tuning CLI tool
+├── docker-compose.yml
+├── Dockerfile               # Multi-stage build (Node + Python)
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
 
-## Installation
+---
 
-### Prerequisites
-- Python 3.8 or higher
-- pip package manager
-- OpenAI API key (get one from https://platform.openai.com/api-keys)
+## Backend API
 
-### Setup Steps
+### Endpoints
 
-1. **Clone/Download the project:**
-   ```bash
-   cd "ChatBot Using OpenAI"
-   ```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api` | Welcome message & version |
+| `GET` | `/api/health` | Health check (status, model, version) |
+| `POST` | `/api/chat` | Send message, get response |
+| `POST` | `/api/chat/stream` | Send message, get SSE stream |
+| `POST` | `/api/clear` | Clear conversation |
+| `POST` | `/api/feedback` | Submit rating for a response |
+| `GET` | `/docs` | Interactive Swagger documentation |
 
-2. **Create a virtual environment (recommended):**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+### Chat Request
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and add your OpenAI API key:
-   ```
-   OPENAI_API_KEY=your_api_key_here
-   ```
-
-## Running the Application
-
-### Start the server:
-```bash
-python -m uvicorn app.main:app --reload
-```
-
-The API will be available at `http://localhost:8000`
-
-### Access the interactive documentation:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-## API Endpoints
-
-### 1. Health Check
-```http
-GET /health
-```
-**Response:**
 ```json
+POST /api/chat
 {
-  "status": "healthy",
-  "version": "1.0.0",
-  "model": "gpt-3.5-turbo"
+  "message": "How do I reset my password?",
+  "conversation_history": [],
+  "session_id": "optional-session-id"
 }
 ```
 
-### 2. Send Message
-```http
-POST /chat
-Content-Type: application/json
+### Chat Response
 
-{
-  "message": "What is Python?",
-  "conversation_history": []
-}
-```
-
-**Response:**
 ```json
 {
-  "message": "Python is a high-level programming language...",
+  "message": "I'd be happy to help you reset your password! ...",
   "conversation_history": [
-    {"role": "user", "content": "What is Python?"},
-    {"role": "assistant", "content": "Python is a high-level programming language..."}
+    {"role": "user", "content": "How do I reset my password?"},
+    {"role": "assistant", "content": "I'd be happy to help..."}
   ],
-  "model": "gpt-3.5-turbo",
-  "tokens_used": 45
+  "model": "gpt-4o-mini",
+  "tokens_used": 156,
+  "session_id": "abc-123-def"
 }
 ```
 
-### 3. Clear Conversation
-```http
-POST /clear
+### Streaming Response (SSE)
+
+```
+POST /api/chat/stream
+
+data: {"token": "I'd"}
+data: {"token": " be"}
+data: {"token": " happy"}
+...
+data: [DONE]
 ```
 
-### 4. Summarize Conversation
-```http
-POST /summarize
-Content-Type: application/json
+---
 
+## Frontend
+
+The React frontend provides a responsive customer support chat experience:
+
+- **Mobile-first design** — works on phone, tablet, and desktop
+- **Markdown rendering** — bot responses support formatting, lists, code blocks
+- **Typing indicator** — animated dots while waiting for response
+- **Auto-scroll** — messages scroll into view automatically
+- **Quick actions** — pre-built question buttons for common queries
+- **Cancel support** — abort in-flight requests
+- **Error handling** — toast notifications for errors with auto-dismiss
+
+### Environment Variables (Frontend)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REACT_APP_API_URL` | `/api` | Backend API base URL |
+
+For development with separate frontend/backend, the `proxy` field in `package.json` forwards API requests to `http://localhost:8000`.
+
+---
+
+## Fine-Tuning Your Model
+
+Fine-tuning lets you customize the chatbot's responses to match your company's tone, products, and policies.
+
+### OpenAI Links
+
+| Resource | URL |
+|----------|-----|
+| **Fine-Tuning Dashboard** | https://platform.openai.com/finetune |
+| **API Keys** | https://platform.openai.com/api-keys |
+| **Usage & Billing** | https://platform.openai.com/usage |
+| **Fine-Tuning Guide** | https://platform.openai.com/docs/guides/fine-tuning |
+| **Training Data Format** | https://platform.openai.com/docs/guides/fine-tuning/preparing-your-dataset |
+| **Models Overview** | https://platform.openai.com/docs/models |
+| **Playground** | https://platform.openai.com/playground |
+
+### Step-by-Step Fine-Tuning
+
+#### 1. Prepare training data
+
+Edit `training_data/customer_support_training.jsonl`. Each line is a JSON object:
+
+```json
 {
-  "conversation_history": [
-    {"role": "user", "content": "Tell me about machine learning"},
-    {"role": "assistant", "content": "Machine learning is..."}
+  "messages": [
+    {"role": "system", "content": "You are a helpful customer support agent."},
+    {"role": "user", "content": "How do I reset my password?"},
+    {"role": "assistant", "content": "Here's how to reset your password: ..."}
   ]
 }
 ```
 
+**Best practices:**
+- Include **50-100+ examples** for good results
+- Cover all common customer scenarios
+- Use your actual company's tone and policies
+- Include edge cases and escalation examples
+- Add multi-turn conversations for complex scenarios
+
+#### 2. Validate your data
+
+```bash
+python fine_tune.py validate
+```
+
+#### 3. Upload & start training
+
+```bash
+python fine_tune.py train
+```
+
+Training typically takes 10-30 minutes depending on dataset size.
+
+#### 4. Check status
+
+```bash
+python fine_tune.py status
+```
+
+#### 5. Use the fine-tuned model
+
+Once complete, copy the model ID and add to `.env`:
+
+```bash
+OPENAI_FINE_TUNED_MODEL=ft:gpt-4o-mini-2024-07-18:your-org::abc123
+```
+
+Restart the server — it will automatically prefer the fine-tuned model.
+
+#### Alternative: Use OpenAI Dashboard
+
+1. Go to https://platform.openai.com/finetune
+2. Click **Create** → upload your JSONL file
+3. Select `gpt-4o-mini` as base model
+4. Start training and wait for completion
+5. Copy the model ID to your `.env`
+
+---
+
 ## Configuration
 
-Edit `.env` file to customize settings:
+All configuration is via environment variables (`.env` file):
 
-```env
-# OpenAI Configuration
-OPENAI_API_KEY=your_api_key_here     # Your OpenAI API key (required)
-OPENAI_MODEL=gpt-3.5-turbo           # Model to use (default: gpt-3.5-turbo)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | *(required)* | Your OpenAI API key |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Base model to use |
+| `OPENAI_FINE_TUNED_MODEL` | *(empty)* | Fine-tuned model (overrides base) |
+| `COMPANY_NAME` | `Our Company` | Company name in system prompt |
+| `HOST` | `0.0.0.0` | Server bind address |
+| `PORT` | `8000` | Server port |
+| `MAX_TOKENS` | `2000` | Max response tokens |
+| `TEMPERATURE` | `0.7` | Response creativity (0.0-2.0) |
+| `RATE_LIMIT_PER_MINUTE` | `30` | Max requests per IP per minute |
+| `DEBUG` | `False` | Enable debug mode |
 
-# Application Configuration
-DEBUG=True                             # Enable debug mode
-HOST=0.0.0.0                          # Server host
-PORT=8000                             # Server port
-MAX_TOKENS=2000                       # Max tokens per response
-TEMPERATURE=0.7                       # Response creativity (0-2)
-```
+---
 
-### Configuration Options Explained:
+## Docker Deployment
 
-- **OPENAI_API_KEY**: Required. Your OpenAI API key for authentication.
-- **OPENAI_MODEL**: The ChatGPT model to use. Options: `gpt-3.5-turbo`, `gpt-4`, etc.
-- **MAX_TOKENS**: Maximum tokens in the response (higher = longer responses)
-- **TEMPERATURE**: Controls randomness. 0 = deterministic, 2 = very random
+### Build & run
 
-## Usage Examples
-
-### Python Example
-```python
-import requests
-import json
-
-BASE_URL = "http://localhost:8000"
-
-# Initialize conversation
-conversation_history = []
-
-def chat(message):
-    global conversation_history
-    
-    response = requests.post(
-        f"{BASE_URL}/chat",
-        json={
-            "message": message,
-            "conversation_history": conversation_history
-        }
-    )
-    
-    data = response.json()
-    conversation_history = data["conversation_history"]
-    return data["message"]
-
-# Use the chatbot
-print(chat("Hello, how are you?"))
-print(chat("What's your name?"))  # Context-aware response
-```
-
-### cURL Example
 ```bash
+docker-compose up --build -d
+```
+
+### View logs
+
+```bash
+docker-compose logs -f chatbot
+```
+
+### Stop
+
+```bash
+docker-compose down
+```
+
+The Docker image uses a **multi-stage build**:
+1. **Stage 1** — Builds the React frontend with Node.js
+2. **Stage 2** — Runs the FastAPI server with the built frontend assets
+
+---
+
+## Development
+
+### Backend only
+
+```bash
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+# API docs at http://localhost:8000/docs
+```
+
+### Frontend only
+
+```bash
+cd frontend && npm start
+# Proxies API calls to http://localhost:8000
+```
+
+### Run both (development)
+
+Open two terminals:
+```bash
+# Terminal 1 - Backend
+uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 - Frontend
+cd frontend && npm start
+```
+
+### Testing with curl
+
+```bash
+# Health check
+curl http://localhost:8000/api/health
+
 # Send a message
-curl -X POST "http://localhost:8000/chat" \
+curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "What is FastAPI?",
-    "conversation_history": []
-  }'
+  -d '{"message": "Hello!"}'
 
-# Check health
-curl "http://localhost:8000/health"
-
-# Clear conversation
-curl -X POST "http://localhost:8000/clear"
+# Stream a response
+curl -N -X POST http://localhost:8000/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tell me about your return policy"}'
 ```
 
-### JavaScript/Fetch Example
-```javascript
-async function sendMessage(message, history = []) {
-  const response = await fetch('http://localhost:8000/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message: message,
-      conversation_history: history
-    })
-  });
-  
-  return await response.json();
-}
-
-// Usage
-const result = await sendMessage("Tell me a joke");
-console.log(result.message);
-```
-
-## Code Documentation
-
-### ChatbotService Class
-Main service for interacting with OpenAI API.
-
-**Methods:**
-- `send_message(user_message, conversation_history)`: Send a message and get a response
-- `clear_conversation()`: Clear conversation history
-- `get_conversation_summary(conversation_history)`: Generate a summary
-
-### Models
-
-#### ChatRequest
-Request model with:
-- `message`: The user's message
-- `conversation_history`: Optional previous messages
-
-#### ChatResponse
-Response model with:
-- `message`: The chatbot's response
-- `conversation_history`: Updated history
-- `model`: Model used
-- `tokens_used`: Tokens consumed
-
-## Error Handling
-
-The API handles various errors gracefully:
-
-| Error | Status | Description |
-|-------|--------|-------------|
-| Invalid API Key | 500 | OpenAI API key is invalid |
-| Rate Limit | 500 | OpenAI API rate limit exceeded |
-| Validation Error | 400 | Invalid request format |
-| Server Error | 500 | Unexpected server error |
-
-## Requirements
-
-- **fastapi** (0.104.1): Web framework
-- **uvicorn** (0.24.0): ASGI server
-- **openai** (1.3.6): OpenAI API client
-- **python-dotenv** (1.0.0): Environment variable management
-- **pydantic** (2.5.0): Data validation
-- **requests** (2.31.0): HTTP client
-- **aiohttp** (3.9.1): Async HTTP client
-
-See `requirements.txt` for complete list.
-
-## Deployment
-
-### Using Docker (Example)
-```dockerfile
-FROM python:3.9
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Using Heroku
-```bash
-heroku create your-app-name
-git push heroku main
-heroku config:set OPENAI_API_KEY=your_key_here
-```
+---
 
 ## Troubleshooting
 
-### Issue: "OPENAI_API_KEY is not set"
-**Solution**: Make sure you have created a `.env` file and added your API key:
-```bash
-cp .env.example .env
-# Edit .env and add your key
-```
+| Issue | Fix |
+|-------|-----|
+| `OPENAI_API_KEY is not set` | Copy `.env.example` to `.env` and add your key |
+| `Rate limit exceeded` | Wait 60 seconds or increase `RATE_LIMIT_PER_MINUTE` |
+| `Module not found` (backend) | Run `pip install -r requirements.txt` |
+| `npm start` fails | Run `cd frontend && npm install` first |
+| CORS errors in browser | Backend CORS allows all origins by default |
+| Fine-tuning job failed | Run `python fine_tune.py status` for error details |
+| Docker build fails | Ensure Docker Desktop is running |
 
-### Issue: "Invalid API Key"
-**Solution**: Verify your API key is correct from https://platform.openai.com/api-keys
-
-### Issue: "Rate limit exceeded"
-**Solution**: Wait a moment and try again. OpenAI API has rate limits.
-
-### Issue: ModuleNotFoundError
-**Solution**: Ensure all dependencies are installed:
-```bash
-pip install -r requirements.txt
-```
-
-## API Response Examples
-
-### Successful Response
-```json
-{
-  "message": "Python is a versatile programming language...",
-  "conversation_history": [
-    {"role": "user", "content": "What is Python?"},
-    {"role": "assistant", "content": "Python is a versatile..."}
-  ],
-  "model": "gpt-3.5-turbo",
-  "tokens_used": 156
-}
-```
-
-### Error Response
-```json
-{
-  "detail": "Invalid OpenAI API key"
-}
-```
-
-## Performance Considerations
-
-- **Conversation History**: Longer conversations consume more tokens
-- **Max Tokens**: Higher values increase response time and cost
-- **Temperature**: Lower values are faster, higher values are more creative
-- **Token Counting**: The API returns `tokens_used` for cost tracking
-
-## Security Considerations
-
-1. **API Key Management**: Never commit `.env` file with real keys
-2. **CORS**: Currently allows all origins. Restrict in production
-3. **Rate Limiting**: Consider adding rate limiting for production
-4. **Input Validation**: All inputs are validated using Pydantic
-
-## Contributing
-
-Feel free to submit issues and enhancement requests!
+---
 
 ## License
 
-This project is open source and available under the MIT License.
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section
-2. Review OpenAI API documentation: https://platform.openai.com/docs
-3. Check FastAPI documentation: https://fastapi.tiangolo.com
-
-## References
-
-- [OpenAI API Documentation](https://platform.openai.com/docs)
-- [FastAPI Documentation](https://fastapi.tiangolo.com)
-- [Pydantic Documentation](https://docs.pydantic.dev)
-- [Uvicorn Documentation](https://www.uvicorn.org)
+MIT

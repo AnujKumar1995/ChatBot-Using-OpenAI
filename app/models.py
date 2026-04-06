@@ -1,56 +1,51 @@
 """Pydantic models for request/response validation."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
+from enum import Enum
+
+
+class MessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
 
 
 class Message(BaseModel):
-    """Single message in conversation."""
-    role: str  # "user" or "assistant"
+    role: MessageRole
     content: str
 
 
 class ChatRequest(BaseModel):
-    """Request model for chat endpoint."""
-    message: str
+    message: str = Field(..., min_length=1, max_length=5000)
     conversation_history: Optional[List[Message]] = None
-    
+    session_id: Optional[str] = None
+
     class Config:
-        """Pydantic config."""
         json_schema_extra = {
             "example": {
-                "message": "What is Python?",
-                "conversation_history": [
-                    {"role": "user", "content": "Hello"},
-                    {"role": "assistant", "content": "Hello! How can I help you today?"}
-                ]
+                "message": "How do I reset my password?",
+                "conversation_history": [],
+                "session_id": "abc123"
             }
         }
 
 
 class ChatResponse(BaseModel):
-    """Response model for chat endpoint."""
     message: str
     conversation_history: List[Message]
     model: str
     tokens_used: Optional[int] = None
-    
-    class Config:
-        """Pydantic config."""
-        json_schema_extra = {
-            "example": {
-                "message": "Python is a popular programming language...",
-                "conversation_history": [
-                    {"role": "user", "content": "What is Python?"},
-                    {"role": "assistant", "content": "Python is a popular programming language..."}
-                ],
-                "model": "gpt-3.5-turbo",
-                "tokens_used": 45
-            }
-        }
+    session_id: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
-    """Response model for health check endpoint."""
     status: str
     version: str
     model: str
+
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    message_index: int
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None

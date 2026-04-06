@@ -7,11 +7,14 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=gpt-3.5-turbo
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_FINE_TUNED_MODEL=${OPENAI_FINE_TUNED_MODEL:-}
+      - COMPANY_NAME=${COMPANY_NAME:-Our Company}
       - DEBUG=False
       - MAX_TOKENS=2000
       - TEMPERATURE=0.7
+      - RATE_LIMIT_PER_MINUTE=30
     env_file:
       - .env
-    container_name: openai-chatbot
+    container_name: customer-support-chatbot
     restart: unless-stopped

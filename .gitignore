@@ -58,3 +58,8 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Binary folders
+.bin/
+node_modules/
+frontend/node_modules/
