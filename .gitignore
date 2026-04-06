@@ -58,3 +58,6 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Binary folders
+.bin/

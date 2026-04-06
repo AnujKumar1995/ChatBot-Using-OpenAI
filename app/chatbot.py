@@ -1,129 +1,95 @@
-"""OpenAI Chatbot service."""
-import openai
-import httpx
-from typing import List, Dict, Tuple
+"""OpenAI Customer Support Chatbot service."""
+from openai import AsyncOpenAI
+from typing import List, Dict, Tuple, AsyncGenerator
 from config.settings import settings
+
+CUSTOMER_SUPPORT_PROMPT = f"""You are a friendly, professional customer support agent for {settings.COMPANY_NAME}.
+
+Your responsibilities:
+- Answer customer questions clearly and helpfully
+- Help troubleshoot issues step by step
+- Provide information about products, services, and policies
+- Escalate complex issues by advising the customer to contact a human agent
+- Always maintain a polite, empathetic, and professional tone
+
+Guidelines:
+- Keep responses concise but thorough
+- If you don't know something, say so honestly rather than guessing
+- Ask clarifying questions when the customer's issue is unclear
+- Provide step-by-step instructions when helping with technical issues
+- End responses by asking if there's anything else you can help with
+- Never share sensitive information or make promises you can't keep
+- Use simple language, avoid jargon unless the customer uses it first"""
 
 
 class ChatbotService:
-    """Service for interacting with OpenAI API."""
-    
     def __init__(self):
-        """Initialize the chatbot service with OpenAI API key."""
-        self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = settings.OPENAI_MODEL
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        self.model = settings.active_model
         self.max_tokens = settings.MAX_TOKENS
         self.temperature = settings.TEMPERATURE
-    
-    def send_message(
+
+    async def send_message(
         self,
         user_message: str,
         conversation_history: List[Dict] = None
     ) -> Tuple[str, List[Dict], int]:
-        """
-        Send a message to OpenAI and get a response.
-        
-        Args:
-            user_message: The user's message
-            conversation_history: Previous conversation messages
-            
-        Returns:
-            Tuple of (response_message, updated_history, tokens_used)
-        """
         if conversation_history is None:
             conversation_history = []
-        
-        # Create messages list with system prompt and conversation history
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant. Provide clear and concise responses."
-            }
-        ]
-        
-        # Add conversation history
+
+        messages = [{"role": "system", "content": CUSTOMER_SUPPORT_PROMPT}]
+
         for msg in conversation_history:
             messages.append({
                 "role": msg.get("role", "user"),
                 "content": msg.get("content", "")
             })
-        
-        # Add current user message
-        messages.append({
-            "role": "user",
-            "content": user_message
-        })
-        
+
+        messages.append({"role": "user", "content": user_message})
+
         try:
-            # Call OpenAI API
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=self.max_tokens,
-                temperature=self.temperature
+                temperature=self.temperature,
             )
-            
-            # Extract response
+
             assistant_message = response.choices[0].message.content
             tokens_used = response.usage.total_tokens
-            
-            # Update conversation history
-            conversation_history.append({
-                "role": "user",
-                "content": user_message
-            })
-            conversation_history.append({
-                "role": "assistant",
-                "content": assistant_message
-            })
-            
+
+            conversation_history.append({"role": "user", "content": user_message})
+            conversation_history.append({"role": "assistant", "content": assistant_message})
+
             return assistant_message, conversation_history, tokens_used
-        
-        except openai.AuthenticationError:
-            raise Exception("Invalid OpenAI API key")
-        except openai.RateLimitError:
-            raise Exception("OpenAI API rate limit exceeded. Please try again later.")
-        except openai.APIError as e:
-            raise Exception(f"OpenAI API error: {str(e)}")
-    
-    def clear_conversation(self) -> List[Dict]:
-        """Clear conversation history."""
-        return []
-    
-    def get_conversation_summary(self, conversation_history: List[Dict]) -> str:
-        """
-        Generate a summary of the conversation.
-        
-        Args:
-            conversation_history: The conversation to summarize
-            
-        Returns:
-            Summary text
-        """
-        if not conversation_history:
-            return "No conversation history"
-        
-        messages = [
-            {
-                "role": "system",
-                "content": "Summarize the following conversation in 2-3 sentences."
-            },
-            {
-                "role": "user",
-                "content": "Conversation:\n" + "\n".join([
-                    f"{msg['role'].capitalize()}: {msg['content']}"
-                    for msg in conversation_history
-                ])
-            }
-        ]
-        
-        try:
-            response = openai.ChatCompletion.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=200,
-                temperature=0.5
-            )
-            return response.choices[0].message.content
+
         except Exception as e:
-            return f"Could not generate summary: {str(e)}"
+            raise Exception(f"OpenAI API error: {str(e)}")
+
+    async def stream_message(
+        self,
+        user_message: str,
+        conversation_history: List[Dict] = None
+    ) -> AsyncGenerator[str, None]:
+        if conversation_history is None:
+            conversation_history = []
+
+        messages = [{"role": "system", "content": CUSTOMER_SUPPORT_PROMPT}]
+        for msg in conversation_history:
+            messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+        messages.append({"role": "user", "content": user_message})
+
+        stream = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    def clear_conversation(self) -> List[Dict]:
+        return []

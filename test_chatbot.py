@@ -15,7 +15,7 @@ def test_health():
     """Test health check endpoint."""
     print("\n✓ Testing Health Check...")
     try:
-        response = requests.get(f"{BASE_URL}/health")
+        response = requests.get(f"{BASE_URL}/api/health")
         assert response.status_code == 200
         data = response.json()
         print(f"  Status: {data['status']}")
@@ -32,7 +32,7 @@ def test_chat():
     print("\n✓ Testing Chat Endpoint...")
     try:
         response = requests.post(
-            f"{BASE_URL}/chat",
+            f"{BASE_URL}/api/chat",
             json={
                 "message": "Say 'Hello, this is a test!'",
                 "conversation_history": []
@@ -57,7 +57,7 @@ def test_context(history):
     print("\n✓ Testing Conversation Context...")
     try:
         response = requests.post(
-            f"{BASE_URL}/chat",
+            f"{BASE_URL}/api/chat",
             json={
                 "message": "Do you remember what you just said?",
                 "conversation_history": history
@@ -78,7 +78,7 @@ def test_summarize(history):
     print("\n✓ Testing Conversation Summarization...")
     try:
         response = requests.post(
-            f"{BASE_URL}/summarize",
+            f"{BASE_URL}/api/summarize",
             json={"conversation_history": history}
         )
         assert response.status_code == 200
@@ -94,7 +94,7 @@ def test_clear():
     """Test clear endpoint."""
     print("\n✓ Testing Clear Conversation...")
     try:
-        response = requests.post(f"{BASE_URL}/clear")
+        response = requests.post(f"{BASE_URL}/api/clear")
         assert response.status_code == 200
         data = response.json()
         print(f"  Message: {data['message']}")
